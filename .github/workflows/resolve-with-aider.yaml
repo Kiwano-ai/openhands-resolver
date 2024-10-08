@@ -1,0 +1,124 @@
+name: Auto-Fix Tagged Issues with Aider
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  auto-fix:
+    if: github.event.label.name == 'fix-me-aider'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Comment on issue with start message
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `Aider has started working on this issue. You can monitor the progress [here](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`
+            });
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Aider
+        run: |
+          python -m pip install --upgrade pip
+          pip install aider-chat
+
+      - name: Set up Git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+      - name: Get issue details
+        id: issue
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const issue = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            const title = issue.data.title.replace(/"/g, '\\"');
+            const body = issue.data.body.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+            console.log(`::set-output name=title::${title}`);
+            console.log(`::set-output name=body::${body}`);
+
+      - name: Generate random string
+        id: random
+        run: echo "RANDOM_STRING=$(openssl rand -hex 6)" >> $GITHUB_OUTPUT
+
+      - name: Run Aider to fix issue
+        env:
+          OPENAI_API_KEY: ${{ secrets.HUNDRED_X_OPENAI_API_KEY }}
+        run: |
+          BRANCH_NAME="fix-issue-${{ github.event.issue.number }}-${{ steps.random.outputs.RANDOM_STRING }}"
+          git checkout -b $BRANCH_NAME
+          
+          AIDER_MESSAGE="Attempting to fix issue: ${{ steps.issue.outputs.title }}\n\n${{ steps.issue.outputs.body }}"
+          
+          aider --yes --auto-commits --commit --message "$AIDER_MESSAGE"
+          
+          if [[ -n $(git status --porcelain) ]]; then
+            git push origin $BRANCH_NAME
+            echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+            echo "CHANGES_MADE=true" >> $GITHUB_ENV
+          else
+            echo "No changes were made by Aider."
+            echo "CHANGES_MADE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create Pull Request
+        if: env.CHANGES_MADE == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Fix issue #${{ github.event.issue.number }}"
+          title: "[Aider] Fix for issue #${{ github.event.issue.number }}: ${{ steps.issue.outputs.title }}"
+          body: "This is an automated PR created by Aider AI to address issue #${{ github.event.issue.number }}. Please review the changes carefully."
+          branch: ${{ env.BRANCH_NAME }}
+          base: main
+          draft: true
+
+      - name: Comment on issue
+        if: env.CHANGES_MADE == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `A potential fix has been generated and a draft PR has been created. Please review the changes.`
+            });
+
+      - name: Comment on issue if no changes
+        if: env.CHANGES_MADE == 'false'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Aider attempted to fix this issue but no changes were made. Manual intervention may be required.'
+            });
