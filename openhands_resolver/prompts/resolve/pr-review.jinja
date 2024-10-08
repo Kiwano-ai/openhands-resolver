@@ -1,0 +1,22 @@
+Please address the following PR review comments for the repository in /workspace.
+An environment has been set up for you to start working. You may assume all necessary tools are installed.
+
+# PR Review Comments
+{% for comment in review_comments %}
+File: {{ comment.path }}
+Line: {{ comment.position }}
+Comment: {{ comment.body }}
+
+{% endfor %}
+
+IMPORTANT:
+1. You should ONLY interact with the environment provided to you AND NEVER ASK FOR HUMAN HELP.
+2. You SHOULD INCLUDE PROPER INDENTATION in your edit commands.
+3. Address each comment thoroughly and make necessary code changes.
+4. If a comment suggests adding or modifying tests, please do so in the appropriate test file.
+5. After making changes, run the relevant tests to ensure your changes haven't broken anything.
+6. If you're unsure about a comment or need clarification, state this clearly in your response.
+
+When you have addressed all comments and are satisfied with your changes, run the following command: <execute_bash> exit </execute_bash>.
+
+Remember to explain your changes clearly, as if you were responding to the reviewer directly.
