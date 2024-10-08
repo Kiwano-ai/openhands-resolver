@@ -26,6 +26,7 @@ mypy = "*"
 ruff = "*"
 black = "*"
 types-requests = "*"
+pytest = "^8.3.3"
 
 [tool.poetry.group.test.dependencies]
 pytest = "*"
